@@ -73,11 +73,10 @@ List<ProductBasicInfo> GetProducts()
 {
     // note that Iden and Alias as a column name of returned data
     // so we need to access by these key to get column value.
-    var ids = new List<ProductBasicInfo>();
-    var qoutput = sql.Queries("SELECT Id as [Iden], Name as [Alias] FROM ProductTbl");
-    foreach (var item in qoutput)
-        ids.Add(new ProductBasicInfo { Id = (int)item["Iden"], ProductName = (string)item["Alias"] });
-    return ids;
+    // using System.Linq
+    return sql
+        .Queries("SELECT Id as [Iden], Name as [Alias] FROM ProductTbl")
+        .ConvertAll<ProductBasicInfo>(item => new ProductBasicInfo { Id = (int)item["Iden"], ProductName = (string)item["Alias"] });
 }
 ```
 
@@ -90,3 +89,120 @@ List<ProductBasicInfo> GetProducts()
 ```
 
 6. Using join, view, stored procedure...just like above.
+Hmm, seem like complex sample which I don't want to show you but:
+Now we have db structure like so: 
+`Bill <1 --- N> BillDetail <N --- 1> Product`
+
+
+```
+// Added 3 more models
+public class BillDetail
+{
+    [Field("Id", SqlDbType.Int)]
+    public int Id { get; set; }
+
+    [Field("BillId", SqlDbType.Int)]
+    public int BillId { get; set; }
+
+    [Field("ProductId", SqlDbType.Int)]
+    public int ProductId { get; set; }
+
+    [Field("Quantity", SqlDbType.Int)]
+    public int Quantity { get; set; }
+}
+
+public class Bill
+{
+    [Field("Id", SqlDbType.Int)]
+    public int Id { get; set; }
+
+    [Field("CreatedDate", SqlDbType.DateTime2)]
+    public DateTime CreatedDate { get; set; }        
+}
+
+public class BillVM : Bill
+{
+    // Non database field
+    public Dictionary<ProductBasicInfo, int> Products { get; set; }
+}
+
+// Insert bill infor
+int InsertBill(Bill b)
+{
+    // Insert and return inserted id
+    return sql.NonQuery(
+        "INSERT INTO Bill(CreatedDate) OUTPUT INSERTED.Id VALUES (@CreatedDate)", Sql.Param("@CreatedDate", b.CreatedDate, SqlDbType.DateTime2));
+}
+
+// Insert bill detail info
+int InsertBillDetails(List<BillDetail> bds)
+{
+    var values = new List<string>();
+    var @params = new List<SqlParameter>();
+    for (var i = 0; i < bds.Count; ++i)
+    {
+        values.Add(string.Format("(@BillId{0}, @ProductId{0}, @Quantity{0})", i));
+        @params.Add(Sql.Param("@BillId" + i, bds[i].BillId, SqlDbType.Int));
+        @params.Add(Sql.Param("@ProductId" + i, bds[i].ProductId, SqlDbType.Int));
+        @params.Add(Sql.Param("@Quantity" + i, bds[i].Quantity, SqlDbType.Int));
+    }
+    return sql.NonQuery(
+        "INSERT INTO BillDetail(BillId, ProductId, Quantity) VALUES " + string.Join(", ", values.ToArray()),
+        @params.ToArray());
+}
+
+// 
+var billId = InsertBill(new Bill { CreatedDate = DateTime.Now });
+InsertBillDetails(new List<BillDetail> 
+{
+    new BillDetail{ BillId = billId, ProductId = 1, Quantity = 5 },
+    new BillDetail{ BillId = billId, ProductId = 2, Quantity = 3 },
+    new BillDetail{ BillId = billId, ProductId = 3, Quantity = 4 },
+});
+
+// Show bill
+
+var bvm = new BillVM { Id = billId, Products = new Dictionary<ProductBasicInfo, int>() };
+sql.Queries(@"
+SELECT bo.CreatedDate as [Date], p.Id as [ProdId], p.Name as [ProdName], bo.Quantity as [Qty]
+FROM ProductTbl as p 
+JOIN (SELECT bi.Id, bi.CreatedDate, bd.ProductId, bd.Quantity
+      FROM Bill as bi
+      JOIN BillDetail as bd 
+      ON bi.Id = bd.BillId) as bo
+ON bo.Id = @Id AND p.Id = bo.ProductId", Sql.Param("@Id", billId, SqlDbType.Int))
+    .ForEach(x => {
+        bvm.CreatedDate = (DateTime)x["Date"]; // assign multiple time is stupid, right?
+        bvm.Products[new ProductBasicInfo { Id = (int)x["ProdId"], ProductName = (string)x["ProdName"] }] = (int)x["Qty"];
+    });
+// show data
+Console.WriteLine("Bill: " + billId);
+Console.WriteLine("Created Date: " + bvm.CreatedDate.ToString());
+Console.WriteLine("Products:");
+Console.WriteLine("============================================");            
+Console.WriteLine("Id     |Name                      |Quantity ");
+Console.WriteLine("--------------------------------------------");
+foreach (var item in bvm.Products)
+{
+    Console.WriteLine(
+        item.Key.Id.ToString().PadRight(7, ' ') + '|' + 
+        item.Key.ProductName.PadRight(26, ' ') + '|' + 
+        item.Value.ToString().PadRight(8, ' '));
+}
+Console.WriteLine("============================================");
+```
+
+Result:
+
+```
+Bill: 1
+Created Date: 7/9/18 1:33:37 AM
+Products:
+============================================
+Id     |Name                      |Quantity
+--------------------------------------------
+1      |Coconut                   |5
+2      |Banana                    |3
+3      |Pineapple                 |4
+============================================
+```
