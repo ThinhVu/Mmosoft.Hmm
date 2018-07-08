@@ -89,8 +89,11 @@ List<ProductBasicInfo> GetProducts()
 ```
 
 6. Using join, view, stored procedure...just like above.
-Now we have db structure like so: 
-`Bill <1 --- N> BillDetail <N --- 1> Product`
+Now we have db structure like so:
+
+```
+Bill <1 --- N> BillDetail <N --- 1> Product
+```
 
 
 ```
