@@ -1,5 +1,5 @@
 # Hmm
-Simple ORM implementation which help working with db in C# more quicker.
+Simple ORM library which help user works with mssqlserver in C# quicker.
 
 # How to use
 There are some example using this libary to do some insert, query action.
