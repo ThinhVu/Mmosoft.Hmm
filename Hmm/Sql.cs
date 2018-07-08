@@ -13,76 +13,111 @@ namespace Hmm
         /// </summary>
         static class Mapper
         {
-            // 
+            /// <summary>
+            /// Extract data from sql data reader and store in dictionary
+            /// If there is no data in data reader, null object will be returned.
+            /// </summary>
             public static Dictionary<string, object> Map(SqlDataReader dr)
             {
-                var oo = new Dictionary<string, object>();
-                List<string> fields = getSQLDataReaderFields(dr);
-                foreach(var field in fields)
-                    oo[field] = dr[field];
-                return oo;
+                Dictionary<string, object> o = null;
+                // note that only this method Read data form data reader
+                // another Map, Maps method not call this function
+                if (dr.Read())
+                {
+                    o = new Dictionary<string, object>();
+                    List<string> fields = getSQLFields(dr);
+                    foreach (var field in fields)
+                        o[field] = dr[field];
+                }
+                return o;
             }
+            /// <summary>
+            /// Extract data from sql data reader and store in dictionary list
+            /// </summary>            
             public static List<Dictionary<string, object>> Maps(SqlDataReader dr)
             {
                 var items = new List<Dictionary<string, object>>();
-                while (dr.Read())
-                    items.Add(Map(dr));
+                Dictionary<string, object> item;
+                while ((item = Map(dr)) != null)
+                    items.Add(item);
                 return items;
             }
-            //
-            public static T Map<T>(SqlDataReader dr)where T : new()
+            /// <summary>
+            /// Get strongly-typed object with data in dictionary
+            /// </summary>
+            public static T Map<T>(Dictionary<string, object> data) where T : new()
+            {
+                Tuple<PropertyInfo, string>[] modelProps = getModelProps(typeof(T));
+                // auto mapping
+                var item = new T();
+                for (int i = 0; i < modelProps.Length; i++)
+                {
+                    var columName = modelProps[i].Item2;
+                    if (data.ContainsKey(columName))
+                        modelProps[i].Item1.SetValue(item, data[columName], null);
+                }
+                return item;
+            }
+            /// <summary>
+            /// Get strongly-typed object list with data in dictionary list
+            /// </summary>            
+            public static List<T> Maps<T>(List<Dictionary<string, object>> data) where T : new()
+            {
+                // duplicate code a bit but better performance.
+                Tuple<PropertyInfo, string>[] modelProps = getModelProps(typeof(T));
+                var items = new List<T>();
+                // auto mapping
+                foreach (var d in data)
+                {
+                    var item = new T();
+                    for (int i = 0; i < modelProps.Length; i++)
+                    {
+                        var columName = modelProps[i].Item2;
+                        if (d.ContainsKey(columName))
+                            modelProps[i].Item1.SetValue(item, d[columName], null);
+                    }
+                    items.Add(item);
+                }
+                return items;
+            }
+            /// <summary>
+            /// Get strongly-typed object from sql data reader
+            /// </summary>
+            public static T Map<T>(SqlDataReader dr) where T : new()
             {
                 return Map<T>(Map(dr));
             }
+            /// <summary>
+            /// Get strongly-typed object list from sql data reader
+            /// </summary>
             public static List<T> Maps<T>(SqlDataReader dr) where T : new()
             {
                 return Maps<T>(Maps(dr));
-            }
-            //
-            public static T Map<T>(Dictionary<string, object> data) where T : new()
+            }            
+            /// <summary>
+            /// DbProperty and column name in database
+            /// </summary>            
+            private static Tuple<PropertyInfo, string>[] getModelProps(Type targetType)
             {
-                PropertyInfo[] modelProps = getModelProps(typeof(T));
-                
-                var item = new T();                
-                for (int i = 0; i < modelProps.Length; i++)
-                {
-                    var name = (modelProps[i].GetCustomAttributes(typeof(FieldAttribute), true)[0] as FieldAttribute).Name;
-                    if (data.ContainsKey(name))
-                    {
-                        object value = data[name];
-                        modelProps[i].SetValue(item, value, null);
-                    }
-                }
-
-                return item;
-            }
-            public static List<T> Maps<T>(List<Dictionary<string, object>> data) where T : new()
-            {
-                var items = new List<T>();
-                foreach (var d in data)
-                    items.Add(Map<T>(d));
-                return items;
-            }
-            //
-            private static PropertyInfo[] getModelProps(Type targetType, bool inheritAttr = true)
-            {
-                var targetProps = new List<PropertyInfo>();
-                var allProps = getPublicInstanceProps(targetType);
+                var targetProps = new List<Tuple<PropertyInfo, string>>();
+                var allProps = targetType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
                 foreach (var prop in allProps)
-                    if (prop.GetType().GetCustomAttributes(typeof(FieldAttribute), inheritAttr).Length > 0)
-                        targetProps.Add(prop);
+                {
+                    var attr = prop.GetCustomAttributes( attributeType: typeof(FieldAttribute), inherit: true);
+                    if (attr.Length > 0)
+                        targetProps.Add(Tuple.Create(prop, (attr[0] as FieldAttribute).Name));
+                }
                 return targetProps.ToArray();
-            }
-            private static PropertyInfo[] getPublicInstanceProps(Type targetType)
-            {
-                return targetType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-            }
-            private static List<string> getSQLDataReaderFields(SqlDataReader dr)
+            }            
+            /// <summary>
+            /// get list of column name contain in returned data
+            /// </summary>
+            private static List<string> getSQLFields(SqlDataReader dr)
             {
                 // get queried fields
-                var fieldNames = new List<string>();
+                var fieldNames = new List<string>(dr.FieldCount);
                 for (int i = 0; i < dr.FieldCount; i++)
-                    fieldNames.Add(dr.GetName(i).ToLower());
+                    fieldNames.Add(dr.GetName(i));
                 return fieldNames;
             }
         }
@@ -93,43 +128,51 @@ namespace Hmm
         /// <summary>
         /// Init sql helper
         /// </summary>
-        /// <param name="dbSource"></param>
-        /// <param name="dbName"></param>
-        /// <param name="username"></param>
-        /// <param name="password"></param>
         public Sql(string connectionString)
         {
             _connectionString = connectionString;
         }
 
+        /// <summary>
+        /// Create SqlParameter
+        /// </summary> 
         public static SqlParameter Param(string name, object value, SqlDbType type)
         {
             return new SqlParameter(name, value) { SqlDbType = type };
         }
 
+        /// <summary>
+        /// Execute sql non-query command
+        /// </summary>
         public int NonQuery(string cmdText, params SqlParameter[] @params)
         {
             // insert, delete, update
             var cmd = createCmd(cmdText, @params);
             var result = cmd.ExecuteNonQuery();
-            cmd.Dispose();
+            destroyCmd(cmd);
             return result;
         }
 
+        /// <summary>
+        /// Execute sql command and return single value
+        /// </summary>
         public TResult QueryScalar<TResult>(string cmdText, params SqlParameter[] @params)
         {
             var cmd = createCmd(cmdText, @params);
             var result = (TResult) cmd.ExecuteScalar();
-            cmd.Dispose();
+            destroyCmd(cmd);
             return result;
         }
 
+        /// <summary>
+        /// Query and return single record store in Dictionary
+        /// </summary>        
         public Dictionary<string, object> Query(string cmdText, params SqlParameter[] @params)
         {
             var cmd = createCmd(cmdText, @params);
             var dr = cmd.ExecuteReader();
             var item = Mapper.Map(dr);
-            cmd.Dispose();
+            destroyCmd(cmd);
             return item;
         }
 
@@ -138,9 +181,8 @@ namespace Hmm
             var items = new List<Dictionary<string, object>>();
             var cmd = createCmd(cmdText, @params);
             var dr = cmd.ExecuteReader();
-            while (dr.Read())
-                items.Add(Mapper.Map(dr));
-            cmd.Dispose();
+            items.AddRange(Mapper.Maps(dr).ToArray());
+            destroyCmd(cmd);
             return items;
         }
 
@@ -149,7 +191,7 @@ namespace Hmm
             var cmd = createCmd(cmdText, @params);
             var dr = cmd.ExecuteReader();
             var item = Mapper.Map<TModel>(dr);
-            cmd.Dispose();
+            destroyCmd(cmd);
             return item;
         }
 
@@ -158,15 +200,28 @@ namespace Hmm
             var cmd = createCmd(cmdText, @params);
             var dr = cmd.ExecuteReader();
             var items = Mapper.Maps<TModel>(dr);
-            cmd.Dispose();
+            destroyCmd(cmd);
             return items;
         }
 
-        private SqlCommand createCmd(string cmdText, SqlParameter[] @params)
+        private SqlCommand createCmd(string cmdText, SqlParameter[] @params)       
         {
-            var sqlCmd = new SqlCommand(cmdText, new SqlConnection(_connectionString));
-            sqlCmd.Parameters.AddRange(@params);
+            // connection will be close when sqlCmd dispose
+            var sqlConn = new SqlConnection(_connectionString);
+            sqlConn.Open();
+            var sqlCmd = new SqlCommand(cmdText, sqlConn);
+            sqlCmd.Parameters.AddRange(@params);        
             return sqlCmd;
-        }        
+        }
+        private void destroyCmd(SqlCommand cmd)
+        {
+            var conn = cmd.Connection;
+            if (conn != null && conn.State != ConnectionState.Closed)
+            {
+                conn.Close();
+                conn.Dispose();
+            }
+            cmd.Dispose();
+        }
     }
 }
