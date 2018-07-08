@@ -1,5 +1,5 @@
 # Hmm
-Simple ORM implementation which help working with db in C# more quicker.
+Simple ORM library which help user works with mssqlserver in C# quicker.
 
 # How to use
 There are some example using this libary to do some insert, query action.
@@ -89,7 +89,6 @@ List<ProductBasicInfo> GetProducts()
 ```
 
 6. Using join, view, stored procedure...just like above.
-Hmm, seem like complex sample which I don't want to show you but:
 Now we have db structure like so: 
 `Bill <1 --- N> BillDetail <N --- 1> Product`
 
