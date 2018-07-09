@@ -7,16 +7,16 @@ namespace Hmm
     /// Mark a property as a db field
     /// </summary>
     [AttributeUsage(AttributeTargets.Property, Inherited = true, AllowMultiple = false)]
-    public class FieldAttribute : Attribute
+    public class FieldAttr : Attribute
     {
-        // db name
+        // column name
         public string Name { get; private set; }
-        // db type
+        // column type
         public SqlDbType DbType { get; private set; }
-
+        // for the future
         public object DefaultValue { get; set; }
 
-        public FieldAttribute(string columnName, SqlDbType dbType)
+        public FieldAttr(string columnName, SqlDbType dbType)
             : base()
         {
             Name = columnName;

@@ -6,7 +6,7 @@ using System.Reflection;
 
 namespace Hmm
 {   
-    public class Sql
+    public class S
     {
         /// <summary>
         /// Inner class help map model from data reader
@@ -103,9 +103,9 @@ namespace Hmm
                 var allProps = targetType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
                 foreach (var prop in allProps)
                 {
-                    var attr = prop.GetCustomAttributes( attributeType: typeof(FieldAttribute), inherit: true);
+                    var attr = prop.GetCustomAttributes( attributeType: typeof(FieldAttr), inherit: true);
                     if (attr.Length > 0)
-                        targetProps.Add(Tuple.Create(prop, (attr[0] as FieldAttribute).Name));
+                        targetProps.Add(Tuple.Create(prop, (attr[0] as FieldAttr).Name));
                 }
                 return targetProps.ToArray();
             }            
@@ -123,22 +123,54 @@ namespace Hmm
         }
 
         // cache connection string
-        private static string _connectionString;
+        private static string _conn;
+
+        /// <summary>
+        /// Modify this dictionary: edit/add new to fit your's need.
+        /// </summary>
+        public static Dictionary<Type, SqlDbType> TypeMap = new Dictionary<Type, SqlDbType> 
+        {
+            { typeof(System.Boolean), SqlDbType.Bit },
+            { typeof(System.Int16), SqlDbType.SmallInt },
+            { typeof(System.Int32), SqlDbType.Int },
+            { typeof(System.Int64), SqlDbType.BigInt },
+            { typeof(System.Single), SqlDbType.Real },
+            { typeof(System.Double), SqlDbType.Float },
+            { typeof(System.Decimal), SqlDbType.Money },
+            { typeof(System.String), SqlDbType.NVarChar },
+            { typeof(System.DateTime), SqlDbType.DateTime2 }
+        };
 
         /// <summary>
         /// Init sql helper
         /// </summary>
-        public Sql(string connectionString)
+        public S(string connectionString)
         {
-            _connectionString = connectionString;
+            _conn = connectionString;
         }
 
         /// <summary>
-        /// Create SqlParameter
+        /// Create SqlParameter with specified SqlDbType
         /// </summary> 
         public static SqlParameter Param(string name, object value, SqlDbType type)
         {
             return new SqlParameter(name, value) { SqlDbType = type };
+        }
+
+        /// <summary>
+        /// Create SqlParameter and guessing SqlDbType based-on value type
+        /// </summary>
+        public static SqlParameter Param(string name, object value)
+        {
+            var dbType = SqlDbType.Bit;
+            var tov = value.GetType();
+
+            if (TypeMap.ContainsKey(tov))
+                dbType = TypeMap[tov];
+            else
+                throw new Exception("Cannot guess type of value");
+
+            return Param(name, value, dbType);
         }
 
         /// <summary>
@@ -156,7 +188,7 @@ namespace Hmm
         /// <summary>
         /// Execute sql command and return single value
         /// </summary>
-        public TResult QueryScalar<TResult>(string cmdText, params SqlParameter[] @params)
+        public TResult Scalar<TResult>(string cmdText, params SqlParameter[] @params)
         {
             var cmd = createCmd(cmdText, @params);
             var result = (TResult) cmd.ExecuteScalar();
@@ -207,7 +239,7 @@ namespace Hmm
         private SqlCommand createCmd(string cmdText, SqlParameter[] @params)       
         {
             // connection will be close when sqlCmd dispose
-            var sqlConn = new SqlConnection(_connectionString);
+            var sqlConn = new SqlConnection(_conn);
             sqlConn.Open();
             var sqlCmd = new SqlCommand(cmdText, sqlConn);
             sqlCmd.Parameters.AddRange(@params);        
