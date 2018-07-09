@@ -17,14 +17,14 @@ Simple ORM library which help user works with MS SQL Server in C# easier.
 
 # Learn
 
-## S
+## 1. S
 S is a class which:
 1. Execute T-SQL command line.
 2. Create SqlParameter in a easy way.
 3. Auto convert query result into Dictionary<string, object> object.
 4. Auto convert query result into Strongly-typed model.
 
-## Ctor
+### S Ctor
 
 ```cs
 // Create instance of S object
@@ -33,7 +33,7 @@ public S(string connectionString) {...}
 // Example
 S s = new S("connection string");
 ```
-## Properties
+### S Properties
 1. TypeMap property
 Define map table to help AutoMap feature working correctly.
 ```cs
@@ -53,7 +53,7 @@ public static Dictionary<Type, SqlDbType> TypeMap = new Dictionary<Type, SqlDbTy
 };
 ```
 
-## Methods
+### S Methods
 1. Param methods
     ```cs
     // Create sql param by supply name, value and sql type
@@ -138,7 +138,7 @@ public static Dictionary<Type, SqlDbType> TypeMap = new Dictionary<Type, SqlDbTy
 
 That's all. Quite simple, huh?
 
-## FieldAttr
+## 2. FieldAttr
 To make Auto mapper work correctly, we need some way to define what field of model object map with what field in database.
 It's a reason why we need FieldAttr class.
 
