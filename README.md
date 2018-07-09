@@ -1,210 +1,197 @@
 # Hmm
-Simple ORM library which help user works with mssqlserver in C# quicker.
+## Hmm is not good (or still good) for you if
+- You can spend your time to learning well-known .NET ORM framework like EF, NHibernate, NPOCO,... 
+- You don't have a job yet. You know what, now a day, EF is one of .NET developer job basic requirements. So learning EF is better.
 
-# How to use
-There are some example using this libary to do some insert, query action.
+## Hmm is good for you if
+- Performance is important part in your app.
+- You want to spend only about 3-5 minutes to learn tiny ORM and get ready to play with it.
+- You don't have a lot of time to learn EF, Dapper, NPOCO, NHibernate,...
+- You don't want to fully understand the complexity and abstract layer of these fw or you just don't have a time to explore it.
+- You still using SqlDataReader, SqlConnection, SqlParameter... to work with db. (It's take time).
+- You still using string concat to make T-SQL query, un-awareness of SQLi (really badass).
 
-1. Create model
-Model in Hmm is just POCO with Field attribute declared like so, at the moment, no rule is applied (for example length of string):
+## So what Hmm is
 
+Simple ORM library which help user works with MS SQL Server in C# easier.
+
+# Learn
+
+## S
+S is a class which:
+1. Execute T-SQL command line.
+2. Create SqlParameter in a easy way.
+3. Auto convert query result into Dictionary<string, object> object.
+4. Auto convert query result into Strongly-typed model.
+
+## Ctor
+
+```cs
+// Create instance of S object
+public S(string connectionString) {...}
+
+// Example
+S s = new S("connection string");
 ```
+## Properties
+1. TypeMap property
+Define map table to help AutoMap feature working correctly.
+```cs
+// This is default type map dictionary with simple mapping
+// You can add or edit exist item to fit with your database.
+public static Dictionary<Type, SqlDbType> TypeMap = new Dictionary<Type, SqlDbType> 
+{
+    { typeof(System.Boolean), SqlDbType.Bit },
+    { typeof(System.Int16), SqlDbType.SmallInt },
+    { typeof(System.Int32), SqlDbType.Int },
+    { typeof(System.Int64), SqlDbType.BigInt },
+    { typeof(System.Single), SqlDbType.Real },
+    { typeof(System.Double), SqlDbType.Float },
+    { typeof(System.Decimal), SqlDbType.Money },
+    { typeof(System.String), SqlDbType.NVarChar },
+    { typeof(System.DateTime), SqlDbType.DateTime2 }
+};
+```
+
+## Methods
+1. Param methods
+    ```cs
+    // Create sql param by supply name, value and sql type
+    public static SqlParameter Param(string name, object value, SqlDbType type){...}
+
+    // Example
+    S.Param("@Name", "Josh", SqlDbType.NVarchar)
+    ```
+
+    ```cs
+    // Create sql param by supply name and value
+    // corresponding sql db type will be guessed.
+    // See more at S.TypeMap property
+    public static SqlParameter Param(string name, object value){...}
+
+    // Example
+    S.Param("@Name", "Josh")
+    ```
+
+2. NonQuery
+    ```cs
+    // Execute T-SQL non query like insert/delete/update
+    public int NonQuery(string cmdText, params SqlParameter[] @params){...}
+
+    // Example
+    var sql = new S("your connection string");
+    int affected = sql.NonQuery("INSERT INTO Product(Name) VALUES (@Name)", S.Param("@Name", "Nokia 1202"));
+    ```
+
+3. Scalar
+    ```cs
+    // Execute T-SQL and return single value
+    public T Scalar<T>(string cmdText, params SqlParameter[] @params){...}
+
+    // Example
+    var sql = new S("your connection string");
+    int count = sql.Scalar<int>("SELECT COUNT(*) FROM ProductTbl");
+    ```
+
+4. Query
+    ```cs
+    // Execute and return data in Dictionary<string, object> with key is column id, value is column value.
+    public Dictionary<string, object> Query(string cmdText, params SqlParameter[] @params){...}
+
+    // Example
+    var sql = new S("your connection string");
+    var data = sql.Query("SELECT Id, Name FROM ProductTBL");
+    var product = new Product { Id = (int)data["Id"], Name = (string)data["Name"] };
+    ```
+
+
+    ```cs
+    // Execute and return data in strongly-typed T object
+    // Auto mapping will be run in this case.
+    public T Query<T>(string cmdText, params SqlParameter[] @params) where T: new() {...}
+
+    // Example
+    S sql = new S("your connection string");
+    Product product = sql.Query<Product>("SELECT Id, Name FROM ProductTBL");
+    ```
+
+5. Queries
+    ```cs
+    // Execute and return a list of rows of data in List<Dictionary<string, object>>.
+    public List<Dictionary<string, object>> Queries(string cmdText, params SqlParameter[] @params) {...}
+
+    // Example    
+    S sql = new S("your connection string");
+    List<Dictionary<string, object>> pds = sql.Queries("SELECT Id, Name FROM ProductTBL");
+    Product p1 = new Product{ Id=(int)pds[0]["Id"], Name=(string)pds[0]["Name"] }; 
+    ```
+
+    ```cs
+    // Execute and return a list of rows of data in List<T>
+    // Auto mapping will be run in this case
+    public List<T> Queries<T>(string cmdText, params SqlParameter[] @params) where T : new() {...}
+
+    // Example    
+    S sql = new S("your connection string");
+    List<Product> pds = sql.Queries<Product>("SELECT Id, Name FROM ProductTBL");
+    ```
+
+That's all. Quite simple, huh?
+
+## FieldAttr
+To make Auto mapper work correctly, we need some way to define what field of model object map with what field in database.
+It's a reason why we need FieldAttr class.
+
+FieldAttr is a class which inherit Attribute class. And you need to decorate your model property with it. 
+
+### Declaration
+```cs
+[AttributeUsage(AttributeTargets.Property, Inherited = true, AllowMultiple = false)]
+public class FieldAttr : Attribute
+{
+    // column name
+    public string Name { get; private set; }
+    // column type
+    public SqlDbType DbType { get; private set; }
+    // for the future
+    public object DefaultValue { get; set; }
+    public FieldAttr(string columnName, SqlDbType dbType)
+        : base()
+    {
+        Name = columnName;
+        DbType = dbType;
+    }
+}
+```
+
+### Usage:
+
+```cs
+// Define ProductBasicInfo class with Id and Name field
 public class ProductBasicInfo
 {
-    [Field("Id", SqlDbType.Int)]
+    [FieldAttr("Id", SqlDbType.Int)]
     public int Id { get; set; }
-    
-    [Field("Name", SqlDbType.NVarChar)]
+
+    [FieldAttr("Name", SqlDbType.NVarChar)]
     public string ProductName { get; set; }
 }
 
+// Child class also inherit field mapping from base class
 public class ProductFullInfo : ProductBasicInfo
 {
-    [Field("Price", SqlDbType.Int)]
+    [FieldAttr("Price", SqlDbType.Int)]
     public int Price { get; set; }
 
-    // Mapping with custom name in db
-    [Field("MFG", SqlDbType.DateTime2)]
+    // Mapping with MFG column in db
+    [FieldAttr("MFG", SqlDbType.DateTime2)]
     public DateTime ManufacturingDate { get; set; }
     
-    // Mapping with custom name in db
-    [Field("EXP", SqlDbType.DateTime2)]
+    // Mapping with EXP column in db
+    [FieldAttr("EXP", SqlDbType.DateTime2)]
     public DateTime ExpiredDate { get; set; }
 }
 ```
-2. Insert/update/delete 1 item product
-```
-int InsertProduct(ProductFullInfo s)
-{
-    return sql.NonQuery(
-        "INSERT INTO ProductTbl(Name, Price, MFG, EXP) OUTPUT INSERTED.Id VALUES(@Name, @Price, @MFG, @EXP)", 
-        Sql.Param("@Name", s.ProductName, SqlDbType.NVarChar),
-        Sql.Param("@Price", s.Price, SqlDbType.Int),
-        Sql.Param("@MFG", s.ManufacturingDate, SqlDbType.DateTime2),
-        Sql.Param("@EXP", s.ExpiredDate, SqlDbType.DateTime2)
-    );
-}
-```
 
-3. Bulk insert:
-
-```
-int InsertProducts(List<ProductFullInfo> ps)
-{
-    // build sql values, params
-    var values = new List<string>();
-    var @params = new List<SqlParameter>();
-    for(var i=0;i<ps.Count;++i)
-    {
-        values.Add(string.Format("(@Name{0}, @Price{0}, @MFG{0}, @EXP{0})", i));
-        @params.Add(Sql.Param("@Name" + i, ps[i].ProductName, SqlDbType.NVarChar));
-        @params.Add(Sql.Param("@Price" + i, ps[i].Price, SqlDbType.Int));
-        @params.Add(Sql.Param("@MFG" + i, ps[i].ManufacturingDate, SqlDbType.DateTime2));
-        @params.Add(Sql.Param("@EXP" + i, ps[i].ExpiredDate, SqlDbType.DateTime2));
-    }
-    return sql.NonQuery(
-        "INSERT INTO ProductTbl(Name, Price, MFG, EXP) VALUES " + string.Join(", ", values.ToArray()), 
-        @params.ToArray());
-}
-```
-
-4. Query in flexible mode allow you set alias for returned column
-```
-List<ProductBasicInfo> GetProducts()
-{
-    // note that Iden and Alias as a column name of returned data
-    // so we need to access by these key to get column value.
-    // using System.Linq
-    return sql
-        .Queries("SELECT Id as [Iden], Name as [Alias] FROM ProductTbl")
-        .ConvertAll<ProductBasicInfo>(item => new ProductBasicInfo { Id = (int)item["Iden"], ProductName = (string)item["Alias"] });
-}
-```
-
-5. Query in strict mode make your code cleaner
-```
-List<ProductBasicInfo> GetProducts()
-{
-    return sql.Queries<ProductBasicInfo>("SELECT Id, Name FROM ProductTbl");
-}
-```
-
-6. Using join, view, stored procedure...just like above.
-Now we have db structure like so:
-
-```
-Bill <1 --- N> BillDetail <N --- 1> Product
-```
-
-
-```
-// Added 3 more models
-public class BillDetail
-{
-    [Field("Id", SqlDbType.Int)]
-    public int Id { get; set; }
-
-    [Field("BillId", SqlDbType.Int)]
-    public int BillId { get; set; }
-
-    [Field("ProductId", SqlDbType.Int)]
-    public int ProductId { get; set; }
-
-    [Field("Quantity", SqlDbType.Int)]
-    public int Quantity { get; set; }
-}
-
-public class Bill
-{
-    [Field("Id", SqlDbType.Int)]
-    public int Id { get; set; }
-
-    [Field("CreatedDate", SqlDbType.DateTime2)]
-    public DateTime CreatedDate { get; set; }        
-}
-
-public class BillVM : Bill
-{
-    // Non database field
-    public Dictionary<ProductBasicInfo, int> Products { get; set; }
-}
-
-// Insert bill infor
-int InsertBill(Bill b)
-{
-    // Insert and return inserted id
-    return sql.NonQuery(
-        "INSERT INTO Bill(CreatedDate) OUTPUT INSERTED.Id VALUES (@CreatedDate)", Sql.Param("@CreatedDate", b.CreatedDate, SqlDbType.DateTime2));
-}
-
-// Insert bill detail info
-int InsertBillDetails(List<BillDetail> bds)
-{
-    var values = new List<string>();
-    var @params = new List<SqlParameter>();
-    for (var i = 0; i < bds.Count; ++i)
-    {
-        values.Add(string.Format("(@BillId{0}, @ProductId{0}, @Quantity{0})", i));
-        @params.Add(Sql.Param("@BillId" + i, bds[i].BillId, SqlDbType.Int));
-        @params.Add(Sql.Param("@ProductId" + i, bds[i].ProductId, SqlDbType.Int));
-        @params.Add(Sql.Param("@Quantity" + i, bds[i].Quantity, SqlDbType.Int));
-    }
-    return sql.NonQuery(
-        "INSERT INTO BillDetail(BillId, ProductId, Quantity) VALUES " + string.Join(", ", values.ToArray()),
-        @params.ToArray());
-}
-
-// 
-var billId = InsertBill(new Bill { CreatedDate = DateTime.Now });
-InsertBillDetails(new List<BillDetail> 
-{
-    new BillDetail{ BillId = billId, ProductId = 1, Quantity = 5 },
-    new BillDetail{ BillId = billId, ProductId = 2, Quantity = 3 },
-    new BillDetail{ BillId = billId, ProductId = 3, Quantity = 4 },
-});
-
-// Show bill
-
-var bvm = new BillVM { Id = billId, Products = new Dictionary<ProductBasicInfo, int>() };
-sql.Queries(@"
-SELECT bo.CreatedDate as [Date], p.Id as [ProdId], p.Name as [ProdName], bo.Quantity as [Qty]
-FROM ProductTbl as p 
-JOIN (SELECT bi.Id, bi.CreatedDate, bd.ProductId, bd.Quantity
-      FROM Bill as bi
-      JOIN BillDetail as bd 
-      ON bi.Id = bd.BillId) as bo
-ON bo.Id = @Id AND p.Id = bo.ProductId", Sql.Param("@Id", billId, SqlDbType.Int))
-    .ForEach(x => {
-        bvm.CreatedDate = (DateTime)x["Date"]; // assign multiple time is stupid, right?
-        bvm.Products[new ProductBasicInfo { Id = (int)x["ProdId"], ProductName = (string)x["ProdName"] }] = (int)x["Qty"];
-    });
-// show data
-Console.WriteLine("Bill: " + billId);
-Console.WriteLine("Created Date: " + bvm.CreatedDate.ToString());
-Console.WriteLine("Products:");
-Console.WriteLine("============================================");            
-Console.WriteLine("Id     |Name                      |Quantity ");
-Console.WriteLine("--------------------------------------------");
-foreach (var item in bvm.Products)
-{
-    Console.WriteLine(
-        item.Key.Id.ToString().PadRight(7, ' ') + '|' + 
-        item.Key.ProductName.PadRight(26, ' ') + '|' + 
-        item.Value.ToString().PadRight(8, ' '));
-}
-Console.WriteLine("============================================");
-```
-
-Result:
-
-```
-Bill: 1
-Created Date: 7/9/18 1:33:37 AM
-Products:
-============================================
-Id     |Name                      |Quantity
---------------------------------------------
-1      |Coconut                   |5
-2      |Banana                    |3
-3      |Pineapple                 |4
-============================================
-```
+## Examples
+See example in Hmm.Test project
