@@ -9,7 +9,7 @@
 - You don't have a lot of time to learn EF, Dapper, NPOCO, NHibernate,...
 - You don't want to fully understand the complexity and abstract layer of these fw or you just don't have a time to explore it.
 - You still using SqlDataReader, SqlConnection, SqlParameter... to work with db. (It's take time).
-- You still using string concat to make T-SQL query, un-awareness of SQLi (really badass).
+- You still using string concat to make T-SQL query, un-awareness of SQLi.
 
 ## So what Hmm is
 
