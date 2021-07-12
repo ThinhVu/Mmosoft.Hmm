@@ -195,3 +195,7 @@ public class ProductFullInfo : ProductBasicInfo
 
 ## Examples
 See example in Hmm.Test project
+
+## Roadmap
+
+1. Automatically mapping complex field (object)
